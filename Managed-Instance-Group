@@ -1,0 +1,13 @@
+Main.tf 
+
+
+resource "google_compute_instance_group" "default-1" {
+  name      = "managed-instance-1"
+  project = "i-hexagon-397106"
+  zone      = "us-central1-c"
+  named_port {
+    name = "http"
+    port = "8080"
+  }
+}
+
