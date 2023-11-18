@@ -1,0 +1,24 @@
+
+
+Main.tf 
+
+
+resource "google_compute_instance" "default-1" {
+  name = var.name
+  project = "i-hexagon-397106"
+  machine_type = "e2-medium"
+  zone = "us-central1-a"
+  boot_disk {
+    device_name = "device1"
+    initialize_params {
+      image = "ubuntu-os-pro-cloud/ubuntu-pro-2004-lts"
+      labels = {
+        my_label = "value"
+      }
+    }    
+  }
+  network_interface {
+    network = "default"
+  }
+}
+
