@@ -1,8 +1,0 @@
-Main.tf 
-
-
-resource "google_compute_network_firewall_policy" "default-kr" {
-  name = var.name
-  project = "i-hexagon-397106"
-  description = "Sample global network firewall policy"
-}
