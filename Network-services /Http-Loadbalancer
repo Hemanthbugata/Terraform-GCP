@@ -1,0 +1,226 @@
+resource "google_compute_network" "hlb_network"{
+    name          =   "http-hlb-network"
+    project       =   "i-hexagon-397106"
+    provider      =    google-beta
+    auto_create_subnetworks = false 
+}   
+
+
+resource "google_compute_subnetwork" "proxy_subnet"{
+    name              =       "http-proxy-subnet"
+    project                 = "i-hexagon-397106"
+    provider          =        google-beta
+    ip_cidr_range     =       "10.0.0.0/24"
+    region            =        "europe-west1"
+    purpose           =         "REGIONAL_MANAGED_PROXY"
+     role             =       "ACTIVE"
+    network           =       google_compute_network.hlb_network.id
+}
+
+
+resource "google_compute_subnetwork" "hlb_subnet"{
+    name              =       "http-hlb-subnet"
+    project           =       "i-hexagon-397106"
+    provider          =        google-beta
+    ip_cidr_range     =       "10.0.1.0/24"
+    region            =        "europe-west1"
+    network           =       google_compute_network.hlb_network.id
+}
+
+
+resource "google_compute_forwarding_rule" "google_compute_forwarding_rule" {
+    name        =       "http-hlb-forwarding-rule"
+    project     =       "i-hexagon-397106"
+    provider    =       google-beta
+    region      =       "europe-west1"
+    ip_protocol =       "TCP"
+    load_balancing_scheme = "INTERNAL_MANAGED"
+    port_range  = "80"
+    target                = google_compute_region_target_http_proxy.default.id
+    network               = google_compute_network.hlb_network.id
+    subnetwork            = google_compute_subnetwork.hlb_subnet.id
+    network_tier          = "PREMIUM"
+}
+
+
+resource "google_compute_region_target_http_proxy" "default" {
+    name     =  "http-hlb-target-http-proxy"
+    project  = "i-hexagon-397106"
+    provider = google-beta
+    region   =  "europe-west1"
+    url_map  = google_compute_region_url_map.default.id 
+
+}
+
+
+resource "google_compute_region_url_map" "default" {
+    name        =   "http-hlb-url-map"
+    project     =    "i-hexagon-397106"
+    provider    =    google-beta
+    region      =   "europe-west1"
+    default_service = google_compute_region_backend_service.default.id
+
+}
+
+
+
+resource "google_compute_region_backend_service"  "default" {
+    name        =     "http-hlb-backend-subnet"
+    project     =      "i-hexagon-397106"
+    provider    =      google-beta
+    region      =      "europe-west1"
+    protocol    =       "HTTP"
+    load_balancing_scheme = "INTERNAL_MANAGED"
+    timeout_sec = 10
+    health_checks = [google_compute_region_health_check.default.id]
+
+    backend {
+        group   =   google_compute_region_instance_group_manager.mig.instance_group
+        balancing_mode  = "UTILIZATION"
+        capacity_scaler = 1.0
+    }
+}
+
+
+resource "google_compute_instance_template" "instance_template"{
+    name    =       "http-hlb-mig-template"
+    project     =   "i-hexagon-397106"
+    provider    =   google-beta
+    machine_type =  "e2-small"
+
+    network_interface {
+    network    = google_compute_network.hlb_network.id
+    subnetwork = google_compute_subnetwork.hlb_subnet.id
+    }
+disk {
+    source_image = "debian-cloud/debian-10"
+    auto_delete  = true
+    boot         = true
+  }
+
+
+metadata = {
+    startup-script = <<-EOF1
+        #! /bin/bash
+    apt update
+    apt -y install apache2
+    cat <<EOF > /var/www/html/index.html
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Simple Frontend Web App</title>
+        <style>
+            /* Add your background styling here */
+            body {
+                margin: 0;
+                padding: 0;
+                background-color: #DBF9FC; /* Background color */
+                color: #33475b; /* Text color */
+                font-family: Arial, sans-serif;
+                text-align: center;
+            }
+
+            /* Add your content styling here */
+            .content {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background-color: rgba(0, 0, 0, 0.7); /* Background color for content */
+                padding: 20px;
+                border-radius: 10px;
+            }
+
+            h1 {
+                font-size: 36px;
+            }
+
+            p {
+                font-size: 18px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="content">
+            <h1>Welcome to devopsthingsbykr</h1>
+            <p>This is a simple frontend web application for testing loadbalancers.</p>
+        </div>
+    </body>
+    </html>
+    EOF
+ EOF1
+  }
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+
+resource "google_compute_region_health_check"  "default"{
+    name       = "http-hlb-hc"
+    project    = "i-hexagon-397106"
+    provider   = google-beta
+    region     = "europe-west1"
+    http_health_check {
+    port_specification = "USE_SERVING_PORT"
+  }
+}
+
+resource "google_compute_region_instance_group_manager" "mig"{
+    name      =   "http-hlb-mig"
+    project   =  "i-hexagon-397106"
+    provider  =   google-beta
+    region    =    "europe-west1"
+      version {
+    instance_template = google_compute_instance_template.instance_template.id
+    name              = "primary"
+  }
+  base_instance_name = "vm"
+  target_size        = 2
+
+}
+resource "google_compute_firewall" "fw-ilb-to-backends" {
+  name          = "hhtp-hlb-fw-allow-ilb-to-backends"
+  project       =  "i-hexagon-397106"
+  provider      = google-beta
+  direction     = "INGRESS"
+  network       = google_compute_network.hlb_network.id
+  source_ranges = ["10.0.0.0/24"]
+  target_tags   = ["http-server"]
+  allow {
+    protocol = "tcp"
+    ports    = ["80", "443", "8080"]
+  }
+}
+
+# test instance
+resource "google_compute_instance" "vm-test" {
+  name         = "http-hlb-test-vm"
+  project      =  "i-hexagon-397106"
+  provider     = google-beta
+  zone         = "europe-west1-b"
+  machine_type = "e2-small"
+  network_interface {
+    network    = google_compute_network.hlb_network.id
+    subnetwork = google_compute_subnetwork.hlb_subnet.id
+  }
+  boot_disk {
+    initialize_params {
+      image = "debian-cloud/debian-10"
+    }
+  }
+}
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
