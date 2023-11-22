@@ -1,0 +1,219 @@
+# vpc
+resource "google_compute_network" "tlb_network"{
+    name     = "tcp-tlb-network"
+    project  = "i-hexagon-397106"
+    provider = google-beta 
+    auto_create_subnetworks = false
+}
+
+# backend subnet 
+
+resource "google_compute_subnetwork" "tlb_subnet"{
+    name        =  "tcp-tlb-subnet"
+    project  = "i-hexagon-397106"
+    provider    =  google-beta
+    ip_cidr_range = "10.0.1.0/24"
+    region = "europe-west1-b"
+    network = google_compute_network.tlb_network.id
+}
+
+# forwarding rule
+
+resource "google_compute_forwarding_rule" "google_forwarding_rule" {
+    name =  "tcp-tlb-forwarding-rule"
+    project  = "i-hexagon-397106"
+    backend_service = google_compute_region_backend_service.default.id
+    provider =  google-beta
+    region = "europe-west1-b"
+    ip_protocol = "TCP"
+    load_balancing_scheme = "INTERNAL"
+    all_ports = true
+    network     = google_compute_network.tlb_network.id
+    subnetwork  = google_compute_subnetwork.tlb_subnet.id
+}
+ 
+# backend service 
+
+resource "google_compute_region_backend_service" "default" {
+    name = "tcp-tlb-backend-subnet"
+    project  = "i-hexagon-397106"
+    provider = google-beta
+    region  = "europe-west1-b"
+    protocol = "TCP"
+    load_balancing_scheme = "INTERNAL"
+    health_checks = [google_compute_region_health_check.default.id]
+
+    backend {
+        group       = google_compute_region_instance_group_manager.mig.instance_group
+        balancing_mode =  "CONNECTION"
+    }
+}
+
+# instance template 
+
+resource "google_compute_instance_template" "instance_template" {
+    name = "tcp-tlb-mig-template"
+    project  = "i-hexagon-397106"
+    provider = google-beta
+    machine_type = "e2-small"
+    tags    =["allow-ssh","allow-health-check"]
+
+    network_interface {
+    network     = google_compute_network.tlb_network.id
+    subnetwork  = google_compute_subnetwork.tlb_subnet.id
+}
+disk {
+    source_image = "debian-cloud/debian-10"
+    auto_delete  = true
+    boot         = true
+  }
+ 
+ metadata = {
+  startup-script = <<-EOF1
+    #! /bin/bash
+    apt update
+    apt -y install apache2
+    cat <<EOF > /var/www/html/index.html
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Simple Frontend Web App</title>
+        <style>
+            /* Add your background styling here */
+            body {
+                margin: 0;
+                padding: 0;
+                background-color: #222; /* Background color */
+                color: #fff; /* Text color */
+                font-family: Arial, sans-serif;
+                text-align: center;
+            }
+
+            /* Add your content styling here */
+            .content {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background-color: rgba(0, 0, 0, 0.7); /* Background color for content */
+                padding: 20px;
+                border-radius: 10px;
+            }
+
+            h1 {
+                font-size: 36px;
+            }
+
+            p {
+                font-size: 18px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="content">
+            <h1>Welcome to devopsthingsbykr</h1>
+            <p>This is a simple frontend web application for testing loadbalancers.</p>
+        </div>
+    </body>
+    </html>
+    EOF
+  EOF1
+  }
+}
+
+# health  check 
+
+resource "google_compute_region_health_check" "default" {
+    name = "tcp-tlb-hc"
+    project  = "i-hexagon-397106"
+    provider = google-beta
+    region = "europe-west1-b"
+    http_health_check {
+      port = "80"
+    }
+}
+
+# Managed instance Group 
+
+resource "google_compute_region_instance_group_manager" "mig" {
+    name = "tcp-tlb-mig1"
+    project  = "i-hexagon-397106"
+    provider = google-beta 
+    region = "europe-west1-b"
+    version {
+        instance_template =  google_compute_instance_template.instance_template.id
+        name        = "primary"
+    }   
+    base_instance_name = "vm"
+    target_size =  2
+}
+
+# firewall for health-check ranges 
+resource "google_compute_firewall" "fw-hc" {
+    name = "tcp-tlb-fw-allow-hc"
+    project  = "i-hexagon-397106"
+    provider = google-beta
+    direction = "INGRESS"
+    network = google_compute_network.tlb_network.id
+    source_ranges = ["130.211.0.0/22", "35.191.0.0/16", "35.235.240.0/20"]
+    allow {
+    protocol = "tcp"
+  }
+  target_tags = ["allow-health-check"]
+}
+
+resource "google_compute_firewall" "fw_tlb_to_backends" {
+  name          = "tcp-tlb-fw-allow-tlb-to-backends"
+  project       = "i-hexagon-397106"
+  provider      = google-beta
+  direction     = "INGRESS"
+  network       = google_compute_network.tlb_network.id
+  source_ranges = ["10.0.1.0/24"]
+  allow {
+    protocol = "tcp"
+  }
+  allow {
+    protocol = "udp"
+  }
+  allow {
+    protocol = "icmp"
+  }
+}
+
+# allow SSH
+resource "google_compute_firewall" "fw_tlb_ssh" {
+  name          = "tcp-tlb-fw-ssh"
+  project       = "i-hexagon-397106"
+  provider      = google-beta
+  direction     = "INGRESS"
+  network       = google_compute_network.tlb_network.id
+  allow {
+    protocol = "tcp"
+    ports = ["22"]
+  }
+  target_tags   = ["allow-ssh"]
+  source_ranges = ["0.0.0.0/0"]
+}
+
+# test instance
+resource "google_compute_instance" "vm_test" {
+  name         = "tcp-tlb-test-vm"
+  project      = "i-hexagon-397106"
+  provider     = google-beta
+  zone         = "europe-west1-b"
+  machine_type = "e2-small"
+  network_interface {
+    network    = google_compute_network.tlb_network.id
+    subnetwork = google_compute_subnetwork.tlb_subnet.id
+  }
+  boot_disk {
+    initialize_params {
+      image = "debian-cloud/debian-10"
+    }
+  }
+}
+
+
+  
+
+
