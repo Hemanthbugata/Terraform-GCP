@@ -1,0 +1,27 @@
+
+
+//Main.tf 
+
+
+resource "google_compute_instance_template" "instance_template" {
+  name_prefix  = "instance-template-"
+  project = "i-hexagon-397106"
+  machine_type = "e2-medium"
+  region       = "us-central1"
+  // boot disk
+  disk {
+    # ...
+  }
+  // networking
+    # Networking configuration
+  network_interface {
+    network = "default"
+    access_config {
+      nat_ip = "Ephemeral"
+    }
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
