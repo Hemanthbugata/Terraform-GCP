@@ -2,7 +2,7 @@ Main.tf
 
 
 resource "google_compute_network" "vpcnetworks-default-kr" {
-    name = var.name
+    name = vpc-network
     project = "i-hexagon-397106"
     description = "vpc network"
 }
