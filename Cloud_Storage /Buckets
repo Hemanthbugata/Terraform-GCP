@@ -1,0 +1,14 @@
+
+
+Main.tf
+
+
+resource "google_storage_bucket" "default-3" {
+   name = my-bucket
+   project = "i-hexagon-397106"
+   location = "US"
+   storage_class = "STANDARD"
+   public_access_prevention = "inherited"
+   uniform_bucket_level_access = "true"
+   
+}
