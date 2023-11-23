@@ -6,14 +6,14 @@ resource "google_compute_network" "tlb_network"{
     auto_create_subnetworks = false
 }
 
-# backend subnet 
+# backed subnet 
 
-resource "google_compute_subnetwork" "tlb_subnet"{
+resource "google_compute_subnetwork" "tlb_subnet" {
     name        =  "tcp-tlb-subnet"
-    project  = "i-hexagon-397106"
+    project     = "i-hexagon-397106"
     provider    =  google-beta
     ip_cidr_range = "10.0.1.0/24"
-    region = "europe-west1-b"
+    region = "asia-east1"
     network = google_compute_network.tlb_network.id
 }
 
@@ -24,7 +24,7 @@ resource "google_compute_forwarding_rule" "google_forwarding_rule" {
     project  = "i-hexagon-397106"
     backend_service = google_compute_region_backend_service.default.id
     provider =  google-beta
-    region = "europe-west1-b"
+    region = "asia-east1"
     ip_protocol = "TCP"
     load_balancing_scheme = "INTERNAL"
     all_ports = true
@@ -38,10 +38,10 @@ resource "google_compute_region_backend_service" "default" {
     name = "tcp-tlb-backend-subnet"
     project  = "i-hexagon-397106"
     provider = google-beta
-    region  = "europe-west1-b"
+    region  = "asia-east1"
     protocol = "TCP"
     load_balancing_scheme = "INTERNAL"
-    health_checks = [google_compute_region_health_check.default.id]
+    health_checks = [google_compute_region_health_check.default-hc.id]
 
     backend {
         group       = google_compute_region_instance_group_manager.mig.instance_group
@@ -52,8 +52,9 @@ resource "google_compute_region_backend_service" "default" {
 # instance template 
 
 resource "google_compute_instance_template" "instance_template" {
-    name = "tcp-tlb-mig-template"
+    name     = "tcp-tlb-mig-template"
     project  = "i-hexagon-397106"
+    region = "asia-east1"
     provider = google-beta
     machine_type = "e2-small"
     tags    =["allow-ssh","allow-health-check"]
@@ -123,11 +124,11 @@ disk {
 
 # health  check 
 
-resource "google_compute_region_health_check" "default" {
+resource "google_compute_region_health_check" "default-hc" {
     name = "tcp-tlb-hc"
     project  = "i-hexagon-397106"
+    region = "asia-east1"
     provider = google-beta
-    region = "europe-west1-b"
     http_health_check {
       port = "80"
     }
@@ -139,7 +140,7 @@ resource "google_compute_region_instance_group_manager" "mig" {
     name = "tcp-tlb-mig1"
     project  = "i-hexagon-397106"
     provider = google-beta 
-    region = "europe-west1-b"
+    region = "asia-east1"
     version {
         instance_template =  google_compute_instance_template.instance_template.id
         name        = "primary"
@@ -187,6 +188,7 @@ resource "google_compute_firewall" "fw_tlb_ssh" {
   provider      = google-beta
   direction     = "INGRESS"
   network       = google_compute_network.tlb_network.id
+
   allow {
     protocol = "tcp"
     ports = ["22"]
@@ -200,7 +202,7 @@ resource "google_compute_instance" "vm_test" {
   name         = "tcp-tlb-test-vm"
   project      = "i-hexagon-397106"
   provider     = google-beta
-  zone         = "europe-west1-b"
+  zone          = "asia-east1-b"
   machine_type = "e2-small"
   network_interface {
     network    = google_compute_network.tlb_network.id
