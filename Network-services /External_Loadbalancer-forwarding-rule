@@ -1,0 +1,29 @@
+resource "google_compute_forwarding_rule" "default" {
+    name = "web-forwarding-rule"
+    project = "i-hexagon-397106"
+    provider = google-beta
+    region  = "us-central1"
+    port_range = 80
+    backend_service = google_compute_region_backend_service.backend.id
+}
+resource "google_compute_region_backend_service" "backend" { 
+    provider  = google-beta
+    name      = "web-backend"
+    project   = "i-hexagon-397106"
+    region    = "us-central1"
+    load_balancing_scheme = "EXTERNAL"
+    health_checks = [google_compute_region_health_check.hc.id]
+}
+resource "google_compute_region_health_check" "hc" {
+    name =  "web-hc"
+    project = "i-hexagon-397106"
+    provider = google-beta
+    region = "us-central1"
+    check_interval_sec = 5
+    timeout_sec =  5
+
+ tcp_health_check {
+   port = "80"
+ }
+  
+}
