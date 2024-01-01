@@ -1,0 +1,27 @@
+resource "google_bigtable_instance" "instance-bt" {
+    name    =   "instance-bigtable"
+    project =   "psyched-magnet-409514"
+
+    cluster{
+        cluster_id =  "instance-bigtable-1"
+        num_nodes =  1
+        storage_type = "HDD"
+        zone         = "us-central1-a"
+    }
+    cluster {
+      cluster_id = "instance-bigtable-2"
+      storage_type = "HDD"
+      zone          = "us-central1-b"
+      autoscaling_config {
+        min_nodes   = 1
+        max_nodes   = 3
+        cpu_target  = 50
+      } 
+    }   
+    labels = {
+    my-label = "prod-label"
+  }
+}
+
+
+  
