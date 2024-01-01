@@ -1,0 +1,19 @@
+resource "google_sql_database_instance" "sql-instance" {
+    name    =   "sql-instance-1"
+    project     =  "psyched-magnet-409514"
+    database_version = "POSTGRES_15"
+    deletion_protection = false
+    region  = "us-central1"
+
+    settings {
+      tier  =   "db-f1-micro"
+    } 
+}
+
+resource "google_sql_user" "sql-user" {
+    name = "instance-1"
+    project     =  "psyched-magnet-409514"
+    password =  "instance@123"
+    instance = google_sql_database_instance.sql-instance.name
+  
+}
